@@ -47,7 +47,18 @@
 
 :root {
   color-scheme: light;
-  --background: oklch(1 0 0);
+  --background: oklch(0.98 0.004 285);
+  --foreground: oklch(0.18 0.015 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.015 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.015 285);
+  --primary: oklch(0.55 0.24 277);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0.01 285);
+  --secondary-foreground: oklch(0.25 0.02 285);
+  --muted: oklch(0.96 0.01 285);
+  --muted-foreground: oklch(0.56 0.02 285);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
