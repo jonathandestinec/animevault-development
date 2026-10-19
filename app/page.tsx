@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { AnimeVaultOnboarding } from '@/components/animevault-onboarding'
 import {
   Bell,
   BookOpen,
@@ -29,14 +30,10 @@ import {
   X,
 } from 'lucide-react'
 
-const titles = [
-  { title: 'Solo Leveling', type: 'TV', episodes: '10 / 12 eps', score: '9.2', status: 'Watching', image: 'https://cdn.myanimelist.net/images/anime/1707/138033l.jpg', color: 'from-orange-500/50' },
-  { title: 'Frieren: Beyond Journey\'s End', type: 'TV', episodes: '25 / 28 eps', score: '9.4', status: 'Watching', image: 'https://cdn.myanimelist.net/images/anime/1015/138006l.jpg', color: 'from-blue-500/50' },
-  { title: 'The Apothecary Diaries', type: 'TV', episodes: '18 / 24 eps', score: '8.9', status: 'Watching', image: 'https://cdn.myanimelist.net/images/anime/1708/138033l.jpg', color: 'from-rose-500/50' },
-  { title: 'Jujutsu Kaisen 0', type: 'Movie', episodes: 'Complete', score: '8.7', status: 'Completed', image: 'https://cdn.myanimelist.net/images/anime/1121/117044l.jpg', color: 'from-violet-500/50' },
-  { title: 'Demon Slayer: Mugen Train', type: 'Movie', episodes: 'Complete', score: '8.6', status: 'Completed', image: 'https://cdn.myanimelist.net/images/anime/1704/106947l.jpg', color: 'from-red-500/50' },
-  { title: 'A Silent Voice', type: 'Movie', episodes: 'Complete', score: '9.0', status: 'Completed', image: 'https://cdn.myanimelist.net/images/anime/1122/96435l.jpg', color: 'from-cyan-500/50' },
-]
+type AnimeTitle = { title: string; type: string; episodes: string; score: string; status: string; image: string; color: string }
+
+// Library content is intentionally empty until AniList returns the signed-in user's data.
+const titles: AnimeTitle[] = []
 
 const navItems = [
   { label: 'Overview', icon: Home },
@@ -60,6 +57,8 @@ export default function Page() {
       if (data.connected) setConnectedName(data.user?.name ?? 'AniList')
     }).catch(() => undefined)
   }, [])
+
+  if (!connectedName) return <AnimeVaultOnboarding />
 
   async function searchAniList() {
     if (!query.trim()) { setSearchResults([]); return }
@@ -124,10 +123,10 @@ export default function Page() {
           </div>
 
           <div className="mb-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat icon={<Play />} label="Watching" value="12" note="+2 this week" color="text-[#5146e5]" />
-            <Stat icon={<Check />} label="Completed" value="48" note="+5 this month" color="text-[#36a776]" />
-            <Stat icon={<BookOpen />} label="Plan to watch" value="26" note="8 added recently" color="text-[#e1a02f]" />
-            <Stat icon={<Clock3 />} label="Hours watched" value="312" note="Top 8% this month" color="text-[#e06b5d]" />
+            <Stat icon={<Play />} label="Watching" value="0" note="From AniList" color="text-[#5146e5]" />
+            <Stat icon={<Check />} label="Completed" value="0" note="From AniList" color="text-[#36a776]" />
+            <Stat icon={<BookOpen />} label="Plan to watch" value="0" note="From AniList" color="text-[#e1a02f]" />
+            <Stat icon={<Clock3 />} label="Hours watched" value="0" note="From AniList" color="text-[#e06b5d]" />
           </div>
 
           <section className="mb-10">
