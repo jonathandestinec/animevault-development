@@ -13,7 +13,7 @@ const searchQuery = `
         status
         averageScore
         genres
-        description(asHtml: false)
+        synopsis: description(asHtml: false)
         format
       }
     }

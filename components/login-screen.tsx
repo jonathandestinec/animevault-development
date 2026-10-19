@@ -1,12 +1,10 @@
 'use client'
 
 import { Play, Tv } from 'lucide-react'
-import { ANILIST_CLIENT_ID } from '@/lib/anilist'
 import { useAnilistAuth } from '@/hooks/use-anilist-auth'
 
-export function LoginScreen() {
-  const { signIn } = useAnilistAuth()
-  const configured = ANILIST_CLIENT_ID.length > 0
+export function LoginScreen({ error }: { error?: string | null }) {
+  const { signIn, configured } = useAnilistAuth()
 
   return (
     <main className="grid min-h-screen place-items-center bg-[#f7f8fb] px-6 text-[#20212b]">
@@ -20,7 +18,18 @@ export function LoginScreen() {
           AniList account to bring your vault to life.
         </p>
 
-        {configured ? (
+        {error ? (
+          <div className="mt-8 rounded-2xl border border-[#f3c2bd] bg-[#fdeceb] p-5 text-left">
+            <p className="text-sm font-bold text-[#c0392b]">AniList sign-in failed</p>
+            <p className="mt-2 break-words text-sm leading-6 text-[#a8443c]">{error}</p>
+          </div>
+        ) : null}
+
+        {configured === null ? (
+          <div className="mt-8 flex h-12 items-center justify-center">
+            <div className="size-6 animate-spin rounded-full border-2 border-[#e7e8ef] border-t-[#5146e5]" />
+          </div>
+        ) : configured ? (
           <>
             <button
               onClick={signIn}
@@ -37,7 +46,7 @@ export function LoginScreen() {
           <div className="mt-8 rounded-2xl border border-[#f3c98a] bg-[#fff7ec] p-5 text-left">
             <p className="text-sm font-bold text-[#9a6a1f]">AniList isn&apos;t connected yet</p>
             <p className="mt-2 text-sm leading-6 text-[#7d5a23]">
-              To enable sign-in, register an AniList API client and add your Client ID to the app.
+              To enable sign-in, register an AniList API client and add its credentials to the app.
             </p>
             <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-[#7d5a23]">
               <li>
@@ -50,12 +59,13 @@ export function LoginScreen() {
                 <span className="font-mono text-xs">https://[your-domain]/auth/callback</span>.
               </li>
               <li>
-                Add the Client ID to your environment as{' '}
-                <span className="font-mono text-xs">NEXT_PUBLIC_ANILIST_CLIENT_ID</span>.
+                Add the credentials to your environment as{' '}
+                <span className="font-mono text-xs">ANILIST_CLIENT_ID</span> and{' '}
+                <span className="font-mono text-xs">ANILIST_CLIENT_SECRET</span>.
               </li>
             </ol>
             <p className="mt-3 text-xs text-[#a07a30]">
-              Refresh this page after saving the value.
+              Refresh this page after saving the values.
             </p>
           </div>
         )}

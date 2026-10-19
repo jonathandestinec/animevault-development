@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   clearStoredToken,
   getStoredToken,
-  signInWithAniList,
   storeToken,
 } from '@/lib/anilist'
 
 export function useAnilistAuth() {
   const [token, setToken] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
+  // null = still checking whether the server has AniList credentials configured
+  const [configured, setConfigured] = useState<boolean | null>(null)
 
   useEffect(() => {
     setToken(getStoredToken())
@@ -25,8 +26,25 @@ export function useAnilistAuth() {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
+  useEffect(() => {
+    let active = true
+    fetch('/api/anilist/me', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active) setConfigured(Boolean(data?.configured))
+      })
+      .catch(() => {
+        if (active) setConfigured(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // The whole OAuth handshake happens on the server so the client secret is
+  // never shipped to the browser.
   const signIn = useCallback(() => {
-    signInWithAniList()
+    window.location.assign('/api/anilist/connect')
   }, [])
 
   const completeSignIn = useCallback((newToken: string) => {
@@ -37,7 +55,8 @@ export function useAnilistAuth() {
   const signOut = useCallback(() => {
     clearStoredToken()
     setToken(null)
+    void fetch('/api/anilist/logout', { method: 'POST' }).catch(() => {})
   }, [])
 
-  return { token, ready, signedIn: !!token, signIn, completeSignIn, signOut }
+  return { token, ready, configured, signedIn: !!token, signIn, completeSignIn, signOut }
 }

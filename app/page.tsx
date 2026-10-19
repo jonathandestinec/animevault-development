@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Bell, BookOpen, Check, ChevronDown, Clock3, Compass, Heart, Hop as Home, Library, LogOut, Menu, Play, Plus, Search, Settings, TrendingUp, UserRound, X } from 'lucide-react'
 import {
   AnilistListEntry,
@@ -47,12 +47,40 @@ export default function Page() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<AnilistListEntry | null>(null)
   const [detailsId, setDetailsId] = useState<number | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
+
+  // The OAuth callback reports failures through the query string so the reason
+  // is visible instead of a silent bounce back to the login screen.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const status = params.get('anilist')
+    const reason = params.get('reason')
+    if (status === 'error') {
+      setAuthError(reason || 'AniList sign-in failed.')
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (status === 'connected') {
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
 
   // When the user clicks a search result or a non-tracked anime, we open the
   // details modal with just the media id. For tracked entries we have the full
   // entry already.
   const effectiveDetailsId = detailsId ?? selectedEntry?.media.id ?? null
   const { data: detailsMedia, loading: detailsLoading } = useAnilistDetails(token, effectiveDetailsId)
+
+  // Every hook has to run before the early returns below, otherwise React
+  // aborts with "Rendered more hooks than during the previous render".
+  const visibleTitles = useMemo(() => {
+    return flattenLists(data?.lists ?? [])
+      .filter((entry) => {
+        const title = pickTitle(entry.media.title).toLowerCase()
+        const matchesSearch = title.includes(query.toLowerCase())
+        const matchesFilter = activeFilter === 'ALL' || entry.status === activeFilter
+        return matchesSearch && matchesFilter
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+  }, [data, activeFilter, query])
 
   // Loading + unauthenticated states
   if (!ready) {
@@ -62,7 +90,7 @@ export default function Page() {
       </main>
     )
   }
-  if (!signedIn) return <LoginScreen />
+  if (!signedIn) return <LoginScreen error={authError} />
 
   const user = data?.user
   const lists = data?.lists ?? []
@@ -74,17 +102,6 @@ export default function Page() {
     .sort((a, b) => b.updatedAt - a.updatedAt)
   const recent = recentlyUpdated(lists, 6)
   const trackedIds = new Set(allEntries.map((e) => e.media.id))
-
-  const visibleTitles = useMemo(() => {
-    return allEntries
-      .filter((entry) => {
-        const title = pickTitle(entry.media.title).toLowerCase()
-        const matchesSearch = title.includes(query.toLowerCase())
-        const matchesFilter = activeFilter === 'ALL' || entry.status === activeFilter
-        return matchesSearch && matchesFilter
-      })
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-  }, [allEntries, activeFilter, query])
 
   const greeting = user ? greetingForUser(user.name) : { time: 'Welcome', line: 'Welcome back' }
   const today = new Date().toLocaleDateString('en-US', {

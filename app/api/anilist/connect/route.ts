@@ -1,14 +1,41 @@
 import { NextResponse } from 'next/server'
+import {
+  ANILIST_AUTHORIZE_URL,
+  getAnilistOAuthConfig,
+  getRequestOrigin,
+} from '@/lib/anilist-oauth'
 
 export async function GET(request: Request) {
-  const clientId = process.env.ANILIST_CLIENT_ID
-  if (!clientId) return NextResponse.json({ error: 'AniList is not configured.' }, { status: 503 })
+  const origin = getRequestOrigin(request)
+  const config = getAnilistOAuthConfig(request)
 
-  const origin = new URL(request.url).origin
-  const redirectUri = `${origin}/api/anilist/callback`
-  const authorize = new URL('https://anilist.co/api/v2/oauth/authorize')
-  authorize.searchParams.set('client_id', clientId)
-  authorize.searchParams.set('redirect_uri', redirectUri)
+  if (!config) {
+    const home = new URL('/', origin)
+    home.searchParams.set('anilist', 'error')
+    home.searchParams.set(
+      'reason',
+      'AniList is not configured. Add ANILIST_CLIENT_ID and ANILIST_CLIENT_SECRET to your environment.',
+    )
+    return NextResponse.redirect(home)
+  }
+
+  // CSRF protection: the state is echoed back by AniList and verified in the
+  // callback route against the cookie we set here.
+  const state = crypto.randomUUID()
+
+  const authorize = new URL(ANILIST_AUTHORIZE_URL)
+  authorize.searchParams.set('client_id', config.clientId)
+  authorize.searchParams.set('redirect_uri', config.redirectUri)
   authorize.searchParams.set('response_type', 'code')
-  return NextResponse.redirect(authorize)
+  authorize.searchParams.set('state', state)
+
+  const response = NextResponse.redirect(authorize)
+  response.cookies.set('anilist_oauth_state', state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 600,
+  })
+  return response
 }

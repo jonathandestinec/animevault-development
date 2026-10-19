@@ -1,14 +1,9 @@
-// AniList API client: OAuth implicit-grant auth + GraphQL helpers.
-// Docs: https://docs.anilist.co/
+// AniList API client: GraphQL helpers + browser side token storage.
+// The OAuth handshake itself lives on the server (see lib/anilist-oauth.ts and
+// app/api/anilist/*), so no client secret ever reaches the browser.
+// Docs: https://anilist.gitbook.io/anilist-apiv2-docs/
 
-export const ANILIST_AUTH_URL = 'https://anilist.co/api/v2/oauth/authorize'
-export const ANILIST_TOKEN_URL = 'https://anilist.co/api/v2/oauth/token'
 export const ANILIST_API_URL = 'https://graphql.anilist.co'
-
-export const ANILIST_CLIENT_ID = process.env.NEXT_PUBLIC_ANILIST_CLIENT_ID ?? ''
-export const ANILIST_REDIRECT_URI =
-  process.env.NEXT_PUBLIC_ANILIST_REDIRECT_URI ??
-  (typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '')
 
 export type AnimeStatus = 'CURRENT' | 'COMPLETED' | 'PLANNING' | 'PAUSED' | 'DROPPED' | 'REPEATING'
 
@@ -107,20 +102,6 @@ export function clearStoredToken(): void {
   }
 }
 
-export function buildAuthUrl(): string {
-  const params = new URLSearchParams({
-    client_id: ANILIST_CLIENT_ID,
-    redirect_uri: ANILIST_REDIRECT_URI,
-    response_type: 'token',
-  })
-  return `${ANILIST_AUTH_URL}?${params.toString()}`
-}
-
-export function signInWithAniList(): void {
-  if (typeof window === 'undefined') return
-  window.location.assign(buildAuthUrl())
-}
-
 export class AnilistError extends Error {
   status: number
   constructor(message: string, status = 0) {
@@ -156,7 +137,19 @@ export async function anilistFetch<T>(
     throw new AnilistError('Your AniList session has expired. Please sign in again.', 401)
   }
   if (!res.ok) {
-    throw new AnilistError(`AniList request failed (${res.status})`, res.status)
+    // AniList answers schema problems with a JSON body, so surface the real
+    // reason instead of a bare status code.
+    let detail = ''
+    try {
+      const payload = (await res.json()) as GraphQLResponse<unknown>
+      detail = (payload?.errors ?? []).map((e) => e.message).join(' ')
+    } catch {
+      // ignore, the status code is enough
+    }
+    throw new AnilistError(
+      `AniList request failed (${res.status})${detail ? `: ${detail}` : ''}`,
+      res.status,
+    )
   }
 
   const json = (await res.json()) as GraphQLResponse<T>
@@ -185,7 +178,7 @@ const MEDIA_FIELDS = `
   averageScore
   meanScore
   genres
-  description(asHtml: false)
+  synopsis: description(asHtml: false)
   status
   season
   seasonYear
@@ -196,14 +189,14 @@ const LIST_ENTRY_FIELDS = `
   id
   status
   progress
-  score(format: POINT_10)
+  score
   repeat
   updatedAt
   media { ${MEDIA_FIELDS} }
 `
 
 export async function fetchViewer(token: string): Promise<AnilistViewer> {
-  const query = `
+  const viewerQuery = `
     query {
       Viewer {
         id
@@ -212,10 +205,6 @@ export async function fetchViewer(token: string): Promise<AnilistViewer> {
         bannerImage
         about
         mediaListOptions { scoreFormat }
-        mediaLists: animeListCollection {
-          status
-          entries { ${LIST_ENTRY_FIELDS} }
-        }
       }
     }
   `
@@ -225,10 +214,29 @@ export async function fetchViewer(token: string): Promise<AnilistViewer> {
     avatar: { large: string | null } | null
     bannerImage: string | null
     about: string | null
-    mediaLists: { status: AnimeStatus; entries: AnilistListEntry[] }[]
   }
-  const data = await anilistFetch<{ Viewer: RawUser }>(query, {}, token)
-  const v = data.Viewer
+  const viewerData = await anilistFetch<{ Viewer: RawUser | null }>(viewerQuery, {}, token)
+  const v = viewerData.Viewer
+  if (!v) {
+    throw new AnilistError('Your AniList session has expired. Please sign in again.', 401)
+  }
+
+  // The viewer lists live in the root MediaListCollection query, not on the
+  // Viewer type, and the collection has to be requested for a specific user.
+  const listQuery = `
+    query ($userId: Int) {
+      MediaListCollection(userId: $userId, type: ANIME) {
+        lists {
+          status
+          entries { ${LIST_ENTRY_FIELDS} }
+        }
+      }
+    }
+  `
+  const listData = await anilistFetch<{
+    MediaListCollection: { lists: { status: AnimeStatus | null; entries: AnilistListEntry[] }[] }
+  }>(listQuery, { userId: v.id }, token)
+
   return {
     user: {
       id: v.id,
@@ -237,16 +245,18 @@ export async function fetchViewer(token: string): Promise<AnilistViewer> {
       bannerImage: v.bannerImage,
       about: v.about,
     },
-    lists: v.mediaLists.map((l) => ({ status: l.status, entries: l.entries })),
+    lists: (listData.MediaListCollection?.lists ?? [])
+      .filter((l) => l.status)
+      .map((l) => ({ status: l.status as AnimeStatus, entries: l.entries ?? [] })),
   }
 }
 
 export async function searchAnime(token: string | null, search: string, perPage = 20, page = 1) {
   const query = `
     query ($search: String, $perPage: Int, $page: Int) {
-      Page(search: $search, perPage: $perPage, page: $page) {
+      Page(perPage: $perPage, page: $page) {
         pageInfo { currentPage hasNextPage }
-        media(type: ANIME, sort: SEARCH_MATCH) { ${MEDIA_FIELDS} }
+        media(search: $search, type: ANIME, sort: SEARCH_MATCH) { ${MEDIA_FIELDS} }
       }
     }
   `
@@ -283,12 +293,23 @@ export async function updateMediaListEntry(
 }
 
 export async function deleteMediaListEntry(token: string, mediaId: number): Promise<void> {
-  const query = `
-    mutation ($mediaId: Int) {
-      DeleteMediaListEntry(mediaId: $mediaId) { deleted }
+  // DeleteMediaListEntry takes the id of the list entry, not the media id, so
+  // the entry has to be looked up first.
+  const lookupQuery = `
+    query ($mediaId: Int) {
+      MediaList(mediaId: $mediaId, type: ANIME) { id }
     }
   `
-  await anilistFetch(query, { mediaId }, token)
+  const lookup = await anilistFetch<{ MediaList: { id: number } | null }>(lookupQuery, { mediaId }, token)
+  const entryId = lookup.MediaList?.id
+  if (!entryId) return
+
+  const query = `
+    mutation ($id: Int) {
+      DeleteMediaListEntry(id: $id) { deleted }
+    }
+  `
+  await anilistFetch(query, { id: entryId }, token)
 }
 
 export function flattenLists(lists: AnilistList[]): AnilistListEntry[] {

@@ -15,7 +15,8 @@ function CallbackInner() {
     if (handled.current) return
     handled.current = true
 
-    // AniList implicit flow returns the token in the URL hash (#access_token=...).
+    // The server (/auth/callback) exchanges the authorization code and hands
+    // the token over in the URL fragment (#access_token=...).
     const hash = window.location.hash.replace(/^#/, '')
     const hashParams = new URLSearchParams(hash)
     const accessToken = hashParams.get('access_token')
