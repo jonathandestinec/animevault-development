@@ -1,6 +1,6 @@
 'use client'
 
-import { MoreHorizontal, Play, Star } from 'lucide-react'
+import { MoveHorizontal as MoreHorizontal, Play, Star } from 'lucide-react'
 import {
   AnilistListEntry,
   STATUS_LABELS,

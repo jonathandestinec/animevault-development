@@ -1,26 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  Bell,
-  BookOpen,
-  Check,
-  ChevronDown,
-  Clock3,
-  Compass,
-  Heart,
-  Home,
-  Library,
-  LogOut,
-  Menu,
-  Play,
-  Plus,
-  Search,
-  Settings,
-  TrendingUp,
-  UserRound,
-  X,
-} from 'lucide-react'
+import { Bell, BookOpen, Check, ChevronDown, Clock3, Compass, Heart, Hop as Home, Library, LogOut, Menu, Play, Plus, Search, Settings, TrendingUp, UserRound, X } from 'lucide-react'
 import {
   AnilistListEntry,
   AnilistMedia,
